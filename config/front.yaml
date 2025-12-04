@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-private-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-private-app
+  template:
+    metadata:
+      labels:
+        app: my-private-app
+    spec:
+      containers:
+        - name: my-private-container
+          image: mohamedkhaled171/test
+          ports:
+            - containerPort: 5001
+          env:
+            - name: REDIS_HOST
+              value: "redis-service"
+            - name: REDIS_PORT
+              value: "6379"

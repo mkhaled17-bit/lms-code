@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-loadbalancer
+  labels:
+    app: frontend
+spec:
+  type: LoadBalancer
+  selector:
+    app: my-private-app
+  ports:
+    - protocol: TCP
+      port: 80        # External port for the service
+      targetPort: 5001 # Port your frontend pods are listening on
+
