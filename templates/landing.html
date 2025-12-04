@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="landing-container">
+    <h1>Welcome to the Library</h1>
+    <p>Your portal to endless books 📚</p>
+    <div class="landing-buttons">
+        <a href="{{ url_for('login') }}" class="btn login-btn">Login</a>
+        <a href="{{ url_for('signup') }}" class="btn signup-btn">Sign Up</a>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="books-grid">
+    {% for book in books %}
+    <div class="book-card">
+        <img src="{{ url_for('static', filename=book.get('image', 'bookgh.jpg')) }}" alt="Book Cover">
+
+        <div class="book-info">
+            <h4>{{ book.title }}</h4>
+            <p>{{ book.author }}</p>
+
+            {% if not book.borrowed_by %}
+                <form method="post" action="{{ url_for('borrow_book', title=book.title, author=book.author) }}">
+                    <button type="submit">📖 Borrow</button>
+                </form>
+            {% elif book.borrowed_by|lower == current_user|lower %}
+                <form method="post" action="{{ url_for('return_book', title=book.title, author=book.author) }}">
+                    <button type="submit">🔙 Return</button>
+                </form>
+            {% else %}
+                <p style="color: gray; font-size: 14px;">Borrowed by {{ book.borrowed_by }}</p>
+            {% endif %}
+
+            {% if role == "admin" %}
+                <a href="{{ url_for('delete_book', title=book.title, author=book.author) }}">❌ Delete</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% endblock %}

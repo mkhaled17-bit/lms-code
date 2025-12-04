@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library App</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <!-- Navbar only shows if logged in and hide_nav is not set -->
+    {% if session.get('username') and not hide_nav %}
+    <div class="navbar">
+        <div>
+            <a href="{{ url_for('home') }}">Home</a>
+            {% if session.get('role') == 'admin' %}
+                <a href="{{ url_for('add_book') }}">Add Book</a>
+            {% endif %}
+        </div>
+        <div>
+            <form method="GET" action="{{ url_for('home') }}" style="display:inline;">
+                <input type="text" name="q" placeholder="Search books..." value="{{ request.args.get('q', '') }}">
+            </form>
+            <a href="{{ url_for('logout') }}">Sign Out</a>
+        </div>
+    </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+</body>
+</html>
