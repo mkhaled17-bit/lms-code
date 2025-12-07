@@ -185,7 +185,7 @@ body::before {
     padding: 15px 30px;
     border-radius: 8px;
     text-decoration: none;
-    font-size: 18px;
+    font-size: 19px;
     font-weight: bold;
     transition: transform 0.2s, background 0.2s;
 }
