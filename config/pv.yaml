@@ -11,6 +11,6 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   storageClassName: ""
   awsElasticBlockStore:
-    volumeID: vol-02ae58458fced3270
+    volumeID: vol-0419a6d24ab29b6af
     fsType: ext4
 
