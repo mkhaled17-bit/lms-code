@@ -1,0 +1,145 @@
+pipeline {
+    agent any
+
+    environment {
+        // --- 1. Docker Credentials ---
+        DOCKERHUB_TOKEN = credentials('DOCKERHUB_TOKEN') 
+        DOCKERHUB_USERNAME = "mohamedkhaled171"
+        IMAGE_NAME = "pproject" 
+        // 🚨 التعديل: هنستخدم رقم البيلد كـ Tag عشان نضمن التحديث
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+
+        // --- 2. AWS Credentials ---
+        AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+
+        // --- 3. EKS Config ---
+        CLUSTER_NAME = "my-eks-cluster-v2"
+        AWS_DEFAULT_REGION = "us-east-1"
+        KUBECONFIG = "${WORKSPACE}/kubeconfig" 
+    }
+
+    stages {
+        
+        stage('Install Docker') {
+            steps {
+                sh '''
+                    if ! command -v docker &> /dev/null; then
+                        if command -v dnf &> /dev/null; then
+                            sudo dnf update -y; sudo dnf install -y docker
+                            sudo systemctl start docker; sudo systemctl enable docker
+                        elif command -v apt-get &> /dev/null; then
+                            sudo apt-get update; sudo apt-get install -y docker.io
+                        fi
+                    fi
+                    sudo chmod 666 /var/run/docker.sock
+                '''
+            }
+        }
+
+        stage('Clone App Code') {
+            steps {
+                sh 'rm -rf *'
+                sh 'rm -rf .git'
+                git branch: 'master', url: 'https://github.com/mkhaled17-bit/lms-code.git'
+            }
+        }
+        
+        stage('Update EKS Kubeconfig') {
+            steps {
+                sh '''
+                    echo "Updating kubeconfig..."
+                    aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_DEFAULT_REGION --kubeconfig $KUBECONFIG
+                '''
+            }
+        }
+
+        stage('Create requirements.txt') {
+            steps {
+                sh '''
+                    echo "Flask==2.3.3" > requirements.txt
+                    echo "redis==5.0.1" >> requirements.txt
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    echo "Building Docker image"
+                    # هنا بنبني الصورة برقم البيلد (مثلاً pproject:20)
+                    docker build --no-cache -t $DOCKERHUB_USERNAME/$IMAGE_NAME:latest .
+                '''
+            }
+        }
+
+        stage('Login to Docker Hub') {
+            steps {
+                sh 'echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin'
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                sh '''
+                    echo "Pushing image: $DOCKERHUB_USERNAME/$IMAGE_NAME:latest"
+                    docker push $DOCKERHUB_USERNAME/$IMAGE_NAME:latest
+                '''
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    sh 'rm -rf k8s-config'
+                    sh 'git clone --depth 1 -b master https://github.com/mkhaled17-bit/lms-code k8s-config'
+                    
+                    // 🚨 السحر هنا: بنعدل ملف الـ front.yaml عشان يستخدم التاج الجديد بدلاً من latest
+                    // الأمر ده بيشيل كلمة latest ويحط رقم البيلد الحالي
+                    sh "sed -i 's|${IMAGE_TAG}|latest|g' k8s-config/config/front.yaml"
+                    
+                    // طباعة الملف للتأكد من التغيير (Debug)
+                    sh "grep 'image:' k8s-config/config/front.yaml"
+
+                    echo "Cleaning up resources..."
+                    // حذف الـ Deployment والـ PVC لضمان عدم وجود مشاكل قديمة
+                    sh 'kubectl --kubeconfig=$KUBECONFIG delete deployment my-private-app --ignore-not-found=true'
+                    sh 'kubectl --kubeconfig=$KUBECONFIG delete pvc ebs-claim --wait=false --ignore-not-found=true'
+                    sh 'kubectl --kubeconfig=$KUBECONFIG patch pvc ebs-claim -p \'{"metadata":{"finalizers":null}}\' || true'
+                    sh 'kubectl --kubeconfig=$KUBECONFIG delete pv ebs-pv --wait=false --ignore-not-found=true'
+                    sh 'kubectl --kubeconfig=$KUBECONFIG patch pv ebs-pv -p \'{"metadata":{"finalizers":null}}\' || true'
+                    
+                    sh 'sleep 5'
+                    
+                    echo "--- Deploying Backend ---"
+                    def backendFiles = ['pv.yaml', 'pvc.yaml', 'redis.yaml', 'redisServive.yaml']
+                    for (file in backendFiles) {
+                        sh "kubectl --kubeconfig=$KUBECONFIG apply -f k8s-config/config/${file}"
+                    }
+
+                    echo "Waiting 60 seconds for Redis..."
+                    sh 'sleep 60'
+                    
+                    echo "--- Deploying Frontend (Ver: $IMAGE_TAG) ---"
+                    def frontendFiles = ['front.yaml', 'frontservice.yaml']
+                    for (file in frontendFiles) {
+                        sh "kubectl --kubeconfig=$KUBECONFIG apply -f k8s-config/config/${file}"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'if command -v docker &> /dev/null; then docker logout; fi'
+            sh 'if [ -f "$KUBECONFIG" ]; then kubectl --kubeconfig=$KUBECONFIG get deployments -o wide || true; fi'
+        }
+        success {
+            echo "✅ Pipeline completed successfully."
+        }
+        failure {
+            echo "❌ Pipeline failed."
+        }
+    }
+}
