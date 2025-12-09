@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: my-private-container
-          image: mohamedkhaled171/test
+          image: mohamedkhaled171/pproject
           ports:
             - containerPort: 5001
           env:
